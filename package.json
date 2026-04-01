@@ -1,0 +1,33 @@
+{
+  "name": "openocd-tool",
+  "version": "0.0.1",
+  "description": "STM32/GD32 调试器检测与固件烧录 CLI 工具",
+  "main": "index.js",
+  "bin": {
+    "openocd-tool": "./cli.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js",
+    "detect": "node cli.js detect",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "files": [
+    "index.js",
+    "cli.js",
+    "scripts/",
+    "LICENSE",
+    "README.md"
+  ],
+  "keywords": [
+    "openocd",
+    "stm32",
+    "gd32",
+    "flash",
+    "stlink",
+    "daplink",
+    "cmsis-dap",
+    "firmware"
+  ],
+  "author": "coloz",
+  "license": "ISC"
+}

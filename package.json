@@ -1,6 +1,6 @@
 {
   "name": "openocd-tool",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "STM32/GD32 调试器检测与固件烧录 CLI 工具",
   "main": "index.js",
   "bin": {

@@ -1,4 +1,4 @@
-const { execFile } = require("child_process");
+const { execFile, exec } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
@@ -33,6 +33,52 @@ function runOpenocd(args, timeoutMs = 8000) {
         resolve((stdout || "") + (stderr || ""));
       }
     );
+  });
+}
+
+/**
+ * 通过系统 USB 枚举获取 ST-Link 设备的序列号
+ * Windows 下使用 PowerShell Get-PnpDevice，Linux 下读取 /sys/bus/usb
+ */
+function getStlinkSerials() {
+  return new Promise((resolve) => {
+    if (isWin) {
+      const psCmd = `Get-PnpDevice | Where-Object { $_.InstanceId -match '^USB\\\\VID_0483' -and $_.InstanceId -notmatch 'MI_' } | Select-Object -ExpandProperty InstanceId`;
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-Command", psCmd],
+        { timeout: 5000, windowsHide: true },
+        (_err, stdout) => {
+          const serials = [];
+          const lines = (stdout || "").split("\n");
+          for (const line of lines) {
+            // USB\VID_0483&PID_374B\005300194A00001156313848
+            const m = line.match(/USB\\VID_([0-9a-fA-F]{4})&PID_([0-9a-fA-F]{4})\\([^\s]+)/);
+            if (m) {
+              serials.push({ vid: m[1], pid: m[2], serial: m[3].trim() });
+            }
+          }
+          resolve(serials);
+        }
+      );
+    } else {
+      // Linux: 遍历 /sys/bus/usb/devices 查找 ST-Link 设备
+      exec(
+        'grep -rl "0483" /sys/bus/usb/devices/*/idVendor 2>/dev/null | while read f; do d=$(dirname "$f"); vid=$(cat "$d/idVendor"); pid=$(cat "$d/idProduct"); serial=$(cat "$d/serial" 2>/dev/null || echo ""); echo "$vid:$pid:$serial"; done',
+        { timeout: 5000 },
+        (_err, stdout) => {
+          const serials = [];
+          const lines = (stdout || "").split("\n");
+          for (const line of lines) {
+            const parts = line.trim().split(":");
+            if (parts.length >= 3 && parts[0] === "0483") {
+              serials.push({ vid: parts[0], pid: parts[1], serial: parts.slice(2).join(":") });
+            }
+          }
+          resolve(serials);
+        }
+      );
+    }
   });
 }
 
@@ -99,15 +145,19 @@ async function detectStlink() {
     });
   }
 
-  // 解析序列号和目标电压
-  const serialMatch = output.match(
-    /Info\s*:\s*(?:STLINK|ST-LINK).*?serial:\s*(\S+)/i
-  );
+  // 通过系统 USB 枚举获取序列号
+  const usbSerials = await getStlinkSerials();
+
   const voltageMatch = output.match(
     /Info\s*:\s*Target voltage:\s*([\d.]+)/i
   );
   for (const dev of devices) {
-    if (serialMatch) dev.serial = serialMatch[1];
+    // 匹配 VID:PID 找到对应的 USB 序列号
+    const usbInfo = usbSerials.find(
+      (u) => u.vid.toLowerCase() === dev.vid.toLowerCase() &&
+             u.pid.toLowerCase() === dev.pid.toLowerCase()
+    );
+    if (usbInfo && usbInfo.serial) dev.serial = usbInfo.serial;
     if (voltageMatch) dev.targetVoltage = `${voltageMatch[1]}V`;
   }
 
@@ -388,4 +438,15 @@ async function detectAllDevices() {
   return allDevices;
 }
 
-module.exports = { detectAllDevices, detectStlink, detectDaplink, flashFirmware };
+/**
+ * 缩写序列号，便于 UI 显示
+ * @param {string} serial - 完整序列号
+ * @param {number} [keep=8] - 保留的末尾字符数
+ * @returns {string} 缩写后的序列号，如 "...13848" 或原样返回（短序列号）
+ */
+function shortSerial(serial, keep = 8) {
+  if (!serial || serial.length <= keep) return serial || "";
+  return "..." + serial.slice(-keep);
+}
+
+module.exports = { detectAllDevices, detectStlink, detectDaplink, flashFirmware, shortSerial };

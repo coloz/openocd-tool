@@ -155,6 +155,15 @@ async function main() {
         detectDaplink(),
       ]);
       const allDevices = [...stlinkDevices, ...daplinkDevices];
+      for (const dev of allDevices) {
+        if (dev.serial) {
+          if (dev.type === "ST-Link") {
+            dev.shortSerial = dev.serial.slice(0, 10);
+          } else {
+            dev.shortSerial = dev.serial.slice(-10);
+          }
+        }
+      }
       console.log(JSON.stringify(allDevices, null, 2));
     } else {
       await detectAllDevices();

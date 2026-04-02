@@ -2,18 +2,18 @@
   "name": "openocd-tool",
   "version": "0.0.2",
   "description": "STM32/GD32 调试器检测与固件烧录 CLI 工具",
-  "main": "index.js",
+  "main": "lib/index.js",
   "bin": {
-    "openocd-tool": "./cli.js"
+    "openocd-tool": "./bin/cli.js"
   },
   "scripts": {
     "postinstall": "node scripts/postinstall.js",
-    "detect": "node cli.js detect",
+    "detect": "node bin/cli.js detect",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "files": [
-    "index.js",
-    "cli.js",
+    "lib/",
+    "bin/",
     "scripts/",
     "LICENSE",
     "README.md"

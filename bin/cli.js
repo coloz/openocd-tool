@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 
-const { detectAllDevices, detectStlink, detectDaplink, flashFirmware } = require("./index");
+const { detect, flashFirmware } = require("../lib");
 
 const HELP_TEXT = `
 openocd-tool - STM32/GD32 调试器检测与固件烧录工具
@@ -143,30 +143,38 @@ async function main() {
   }
 
   if (opts.version) {
-    const pkg = require("./package.json");
+    const pkg = require("../package.json");
     console.log(`openocd-tool v${pkg.version}`);
     process.exit(0);
   }
 
   if (opts.command === "detect") {
+    const devices = await detect();
     if (opts.json) {
-      const [stlinkDevices, daplinkDevices] = await Promise.all([
-        detectStlink(),
-        detectDaplink(),
-      ]);
-      const allDevices = [...stlinkDevices, ...daplinkDevices];
-      for (const dev of allDevices) {
-        if (dev.serial) {
-          if (dev.type === "ST-Link") {
-            dev.shortSerial = dev.serial.slice(0, 10);
-          } else {
-            dev.shortSerial = dev.serial.slice(-10);
-          }
-        }
-      }
-      console.log(JSON.stringify(allDevices, null, 2));
+      console.log(JSON.stringify(devices, null, 2));
     } else {
-      await detectAllDevices();
+      if (devices.length === 0) {
+        console.log("\u672a\u68c0\u6d4b\u5230\u5df2\u8fde\u63a5\u7684 ST-Link \u6216 DAPLink \u8bbe\u5907\u3002");
+        console.log("\n\u8bf7\u786e\u4fdd\uff1a");
+        console.log("  1. \u8bbe\u5907\u5df2\u901a\u8fc7 USB \u8fde\u63a5\u5230\u7535\u8111");
+        console.log("  2. \u5df2\u5b89\u88c5\u6b63\u786e\u7684 USB \u9a71\u52a8\u7a0b\u5e8f");
+        console.log("     - ST-Link: \u5b89\u88c5 ST-LINK USB Driver (STSW-LINK009)");
+        console.log("     - DAPLink: \u901a\u5e38\u514d\u9a71\u52a8\uff0cWindows \u81ea\u5e26 WinUSB \u652f\u6301");
+      } else {
+        console.log(`\u5171\u68c0\u6d4b\u5230 ${devices.length} \u4e2a\u8c03\u8bd5\u5668\u8bbe\u5907\uff1a\n`);
+        devices.forEach((device, index) => {
+          console.log(`  [${index + 1}] ${device.type}`);
+          console.log(`      \u63cf\u8ff0: ${device.description}`);
+          console.log(`      VID:PID = ${device.vid}:${device.pid}`);
+          if (device.serial) {
+            console.log(`      \u5e8f\u5217\u53f7: ${device.serial}`);
+          }
+          if (device.targetVoltage) {
+            console.log(`      \u76ee\u6807\u7535\u538b: ${device.targetVoltage}`);
+          }
+          console.log();
+        });
+      }
     }
     return;
   }
@@ -196,8 +204,22 @@ async function main() {
       timeout: opts.timeout,
     });
 
-    if (!result.success && result.output) {
-      console.error(result.output);
+    if (result.success) {
+      console.log("\u70e7\u5f55\u6210\u529f\uff01");
+      if (opts.verify && result.output && result.output.includes("Verified OK")) {
+        console.log("\u6821\u9a8c\u901a\u8fc7\u3002");
+      }
+    } else {
+      console.error("\u70e7\u5f55\u5931\u8d25\uff01");
+      if (result.output) {
+        const errorLines = result.output
+          .split("\n")
+          .filter((l) => /error|fail|unable/i.test(l));
+        if (errorLines.length > 0) {
+          console.error("\u9519\u8bef\u4fe1\u606f:");
+          errorLines.forEach((l) => console.error(`  ${l.trim()}`));
+        }
+      }
     }
 
     process.exit(result.success ? 0 : 1);

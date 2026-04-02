@@ -43,7 +43,7 @@ openocd-tool detect --json
 或直接运行：
 
 ```bash
-node cli.js detect
+node bin/cli.js detect
 ```
 
 输出示例：
@@ -133,22 +133,57 @@ openocd-tool flash firmware.hex -t stm32f1x -p jtag -s 1000
 也可以作为 Node.js 模块使用：
 
 ```js
-const { detectAllDevices, flashFirmware } = require("openocd-tool");
+const { detect, detectStlink, detectDaplink, flashFirmware } = require("openocd-tool");
+```
 
-// 检测设备
-const devices = await detectAllDevices();
+### detect()
 
-// 烧录固件
+检测所有已连接的调试器设备（ST-Link + DAPLink），返回设备数组。
+
+```js
+const devices = await detect();
+// [
+//   {
+//     type: "ST-Link",
+//     description: "STLINK V2J14S0 (API v2)",
+//     vid: "0483",
+//     pid: "3748",
+//     serial: "066FFF535752877167253530",
+//     targetVoltage: "3.24V"
+//   }
+// ]
+```
+
+也可以单独检测某一类调试器：
+
+```js
+const stlinks = await detectStlink();   // 仅 ST-Link
+const daplinks = await detectDaplink(); // 仅 DAPLink (CMSIS-DAP)
+```
+
+### flashFirmware(options)
+
+烧录固件到目标芯片，返回 `{ success: boolean, output: string }`。
+
+```js
 const result = await flashFirmware({
-  firmwarePath: "./firmware.hex",
-  target: "stm32f1x",
-  interface: "stlink",   // 可选，默认 stlink
-  verify: true,           // 可选，默认 true
-  reset: true,            // 可选，默认 true
+  firmwarePath: "./firmware.hex",  // 支持 .hex / .bin / .elf
+  target: "stm32f1x",             // 必须，目标芯片
+  interface: "stlink",             // 可选，"stlink" | "cmsis-dap"，默认 "stlink"
+  transport: "swd",                // 可选，"swd" | "jtag"，默认 "swd"
+  speed: 4000,                     // 可选，适配器速度 (kHz)，默认 4000
+  baseAddress: 0x08000000,         // 可选，.bin 文件基地址，默认 0x08000000
+  verify: true,                    // 可选，烧录后校验，默认 true
+  reset: true,                     // 可选，烧录后复位，默认 true
+  eraseAll: false,                 // 可选，全片擦除，默认 false
+  timeout: 60000,                  // 可选，超时 (ms)，默认 60000
 });
 
-console.log(result.success); // true / false
-console.log(result.output);  // OpenOCD 输出
+if (result.success) {
+  console.log("烧录成功");
+} else {
+  console.error("烧录失败:", result.output);
+}
 ```
 
 ## 常见问题
